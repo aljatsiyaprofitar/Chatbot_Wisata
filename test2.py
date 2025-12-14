@@ -246,7 +246,7 @@ class RetrievalEngine:
         # Sorting Top N
         top_n = intent_params['top_n']
         sorted_indices = final_scores.argsort()[::-1][:top_n]
-        
+
         final_results = filtered_df.iloc[sorted_indices]
         return final_results
 
@@ -270,7 +270,10 @@ async def generate_response(query, recommendations, intent_params):
 
     # Mode Instruksi
     if intent_params['is_comparison']:
-        task_instruction = "BANDINGKAN data di atas (apple-to-apple) dari segi harga, rating, dan pengalaman."
+        task_instruction = (
+            "BANDINGKAN data di atas secara LANGSUNG (point-by-point comparison). "
+            "Jangan berikan rekomendasi, fokus pada perbedaan dan persamaan faktual dari data yang disajikan."
+        )
     else:
         task_instruction = "REKOMENDASIKAN tempat di atas sesuai format wajib."
 
@@ -291,7 +294,17 @@ async def generate_response(query, recommendations, intent_params):
     3.  Gunakan Bahasa Indonesia yang ramah, sopan, dan mengalir (natural).
     4.  Jangan menyebut "berdasarkan database" atau "berdasarkan JSON", ucapkan seolah kamu tahu sendiri.
     
-    FORMAT OUTPUT WAJIB (Copy-paste struktur ini):
+    FORMAT OUTPUT WAJIB (Gunakan format A atau B):
+    
+    [Jika mode perbandingan aktif (is_comparison)]:
+    [Nama Tempat 1] VS [Nama Tempat 2]
+    -------------------------------------------
+    KATEGORI: [Perbandingan Kategori]
+    HARGA TIKET: [Perbandingan Harga Tiket]
+    RATING & POPULARITAS: [Perbandingan Rating]
+    DESKRIPSI SINGKAT: [Perbandingan Deskripsi]
+    
+    [Jika mode rekomendasi aktif]:
     [Nama Tempat]
     Kategori: [Kategori] | Rating: [Rating] | HTM: [Harga]
     Alasan: [Satu kalimat padat kenapa ini cocok untuk user berdasarkan deskripsi]
@@ -318,6 +331,8 @@ async def generate_response(query, recommendations, intent_params):
 # 4. TELEGRAM HANDLERS
 # ==========================================
 
+GREETING_KEYWORDS = ['halo', 'hi', 'selamat', 'pagi', 'siang', 'sore', 'malam', 'assalamualaikum', 'salam', 'hai']
+
 async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['shown_ids'] = [] 
     await update.message.reply_text(
@@ -329,6 +344,20 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_query = update.message.text
     if 'shown_ids' not in context.user_data: context.user_data['shown_ids'] = []
     
+    q_lower = user_query.lower().strip()
+
+        # Cek Salam Sederhana
+    is_greeting = (
+        len(q_lower.split()) <= 3 and 
+        any(keyword in q_lower for keyword in GREETING_KEYWORDS)
+    )
+
+    if is_greeting:
+        await update.message.reply_text(
+            "Hai juga! Ada yang bisa Travel-O bantu untuk rencana wisatamu di Jogja?"
+        )
+        return
+
     await context.bot.send_chat_action(chat_id=update.effective_chat.id, action='typing')
 
     # 1. Analisis & Filter
